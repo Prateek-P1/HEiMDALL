@@ -1,4 +1,4 @@
-<img width="1919" height="1079" alt="Screenshot 2025-11-12 205440" src="https://github.com/user-attachments/assets/a8825f89-bee0-4364-b671-916138539f4d" /># HEiMDALL
+# HEiMDALL
 
 > An OTT streaming platform free for all, free forver
 
