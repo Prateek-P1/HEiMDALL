@@ -1,6 +1,6 @@
 # HEiMDALL
 
-> A feature-rich OTT streaming platform built with Flask, Electron, and the TMDB API
+> An OTT streaming platform free for all, free forverI
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)](https://www.python.org/)
