@@ -1,6 +1,6 @@
 # HEiMDALL
 
-> An OTT streaming platform free for all, free forverI
+> An OTT streaming platform free for all, free forver
 
 <div align="center">
 
