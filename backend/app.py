@@ -4,6 +4,8 @@ import os
 import sys
 import requests
 import dotenv
+import asyncio
+import yt_dlp
 
 dotenv.load_dotenv()
 
@@ -28,8 +30,19 @@ app.secret_key = None
 TMDB_API_KEY = os.getenv('TMDB_API_KEY')
 TMDB_BASE_URL = "https://api.themoviedb.org/3"
 
+# Add Cache-Control headers to prevent browser caching of API responses
+@app.after_request
+def add_cache_control_headers(response):
+    """Prevent browser caching of API responses to avoid stale data"""
+    # Only apply to API routes, not static files
+    if request.path.startswith('/api/'):
+        response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+    return response
+
 # Initialize the User model
-from .models.user import User
+from models.user import User
 user_model = User()
 print(f"Heimdall data dir: {getattr(user_model, 'app_data_dir', 'unknown')}")
 print(f"User file: {user_model.file_path}")
@@ -64,7 +77,6 @@ except Exception as e:
     print('Failed to initialize Flask secret key:', e)
     app.secret_key = os.urandom(32)
 
-# ... (All your user/login/profile routes remain exactly the same) ...
 # ...
 @app.route('/')
 def home():
@@ -204,6 +216,13 @@ def search_page():
     if 'username' not in session:
         return redirect('/login.html')
     return render_template('search.html')
+
+@app.route('/music.html')
+def music_page():
+    """Serve the music page"""
+    if 'username' not in session:
+        return redirect('/login.html')
+    return render_template('music.html')
 
 @app.route('/details/<media_type>/<int:tmdb_id>')
 def details_page(media_type, tmdb_id):
@@ -583,6 +602,148 @@ def delete_profile_watchlist(profile_name):
         return jsonify({'message': 'Profile watchlist deleted'}), 200
     
     return jsonify({'message': 'No watchlist data found'}), 200
+
+@app.route('/api/music/search/<query>')
+def search_music(query):
+    all_results = []
+
+    # Search YouTube (using yt-dlp) with updated options to fix signature issues
+    YDL_OPTS = {
+        'format': 'bestaudio/best',
+        'noplaylist': True,
+        'quiet': True,
+        'no_warnings': True,
+        'extract_flat': False,
+        'ignoreerrors': True,  # Continue on errors
+        'age_limit': None,
+        'geo_bypass': True,
+        # These options help with signature extraction issues
+        'extractor_retries': 3,
+        'fragment_retries': 10,
+        'skip_unavailable_fragments': True,
+    }
+    try:
+        with yt_dlp.YoutubeDL(YDL_OPTS) as ydl:
+            # Search for 10 videos to ensure we get good results even if some fail
+            search_data = ydl.extract_info(f"ytsearch10:{query} official audio", download=False)
+            if search_data.get('entries'):
+                for video in search_data['entries']:
+                    # Skip videos that failed to extract
+                    if not video:
+                        continue
+                    try:
+                        all_results.append({
+                            'source': 'youtube',
+                            'id': video['webpage_url'], # The ID will be the full URL
+                            'title': video['title'],
+                            'artist': video.get('uploader', 'Unknown Artist'),
+                            'image': video.get('thumbnail', ''),
+                            'duration': video.get('duration', 0)
+                        })
+                        # Stop after getting 5 valid results
+                        if len(all_results) >= 5:
+                            break
+                    except Exception as e:
+                        print(f"Error processing video: {e}")
+                        continue
+    except Exception as e:
+        print(f"yt-dlp search error: {e}")
+
+    return jsonify(all_results)
+
+@app.route('/api/music/stream')
+def get_music_stream():
+    source = request.args.get('source')
+    track_id = request.args.get('id')
+
+    if not source or not track_id:
+        return jsonify({'error': 'Missing source or id'}), 400
+
+    stream_url = ''
+    try:
+        if source == 'youtube':
+            YDL_OPTS = {
+                'format': 'bestaudio/best', # Select best audio
+                'quiet': True,
+                'no_warnings': True,
+                'ignoreerrors': True,
+                'extractor_retries': 3,
+                'fragment_retries': 10,
+                'skip_unavailable_fragments': True,
+            }
+            with yt_dlp.YoutubeDL(YDL_OPTS) as ydl:
+                info = ydl.extract_info(track_id, download=False)
+                if info and 'url' in info:
+                    stream_url = info['url'] # This is the direct stream URL
+                else:
+                    raise Exception("Could not extract stream URL")
+
+        if not stream_url:
+            raise Exception("Could not find stream URL")
+
+        return jsonify({'stream_url': stream_url})
+
+    except Exception as e:
+        print(f"Stream error: {e}")
+        return jsonify({'error': str(e)}), 500
+    
+@app.route('/api/music/lyrics')
+def get_lyrics():
+    """Proxy endpoint for lyrics with multiple fallback APIs"""
+    artist = request.args.get('artist')
+    title = request.args.get('title')
+    
+    if not artist or not title:
+        return jsonify({'error': 'Missing artist or title'}), 400
+    
+    # Try multiple lyrics sources
+    lyrics_sources = [
+        {
+            'name': 'lyrics.ovh',
+            'url': f"https://api.lyrics.ovh/v1/{artist}/{title}",
+            'timeout': 5
+        },
+        {
+            'name': 'lrclib',
+            'url': f"https://lrclib.net/api/get?artist_name={artist}&track_name={title}",
+            'timeout': 5
+        }
+    ]
+    
+    for source in lyrics_sources:
+        try:
+            print(f"Trying {source['name']} for: {artist} - {title}")
+            response = requests.get(source['url'], timeout=source['timeout'])
+            
+            if response.status_code == 200:
+                data = response.json()
+                
+                # Handle different API response formats
+                if 'lyrics' in data:
+                    # lyrics.ovh format
+                    print(f"Success from {source['name']}")
+                    return jsonify({'lyrics': data['lyrics']}), 200
+                elif 'plainLyrics' in data:
+                    # lrclib format
+                    print(f"Success from {source['name']}")
+                    return jsonify({'lyrics': data['plainLyrics']}), 200
+                elif 'syncedLyrics' in data:
+                    # lrclib synced format (fallback)
+                    print(f"Success from {source['name']} (synced)")
+                    return jsonify({'lyrics': data['syncedLyrics']}), 200
+                    
+        except requests.exceptions.Timeout:
+            print(f"{source['name']} timed out")
+            continue
+        except requests.exceptions.ConnectionError:
+            print(f"{source['name']} connection failed")
+            continue
+        except Exception as e:
+            print(f"{source['name']} error: {e}")
+            continue
+    
+    # All sources failed
+    return jsonify({'error': 'Lyrics not found in any source'}), 404
 
 if __name__ == '__main__':
     # Prefer waitress for a stable single-process server (no reloader).

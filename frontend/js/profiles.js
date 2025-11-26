@@ -77,6 +77,11 @@ const profiles = {
 
             if (!isEditing) {
                 profileEl.addEventListener('click', () => {
+                    // Clear profile-specific cache when switching profiles
+                    console.log('Switching to profile:', profile.name);
+                    if (window.CacheUtils) {
+                        window.CacheUtils.clearProfileCache();
+                    }
                     localStorage.setItem('vstream-current-profile', profile.name);
                     localStorage.setItem('vstream-current-profile', JSON.stringify(profile));
                     window.location.href = 'index.html';
@@ -119,6 +124,18 @@ const profiles = {
                 this.deleteProfile(id);
             }
         });
+
+        // Logout button - clear all cache before logging out
+        const logoutBtn = document.getElementById('logout-btn');
+        if (logoutBtn) {
+            logoutBtn.addEventListener('click', () => {
+                console.log('Logging out - clearing all cache');
+                if (window.CacheUtils) {
+                    window.CacheUtils.clearAllCache();
+                }
+                window.location.href = '/api/logout';
+            });
+        }
     },
 
     createProfileModal() {

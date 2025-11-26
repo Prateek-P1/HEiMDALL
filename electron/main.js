@@ -47,6 +47,7 @@ function startFlaskServer() {
         // Build the environment for the spawned backend. For production we
         // explicitly set HEIMDALL_DATA_DIR so the packaged exe reads the
         // same resources folder that the installer places files into.
+        // For development, set it to a 'data' folder in the project root.
         const spawnEnv = {
             ...process.env,
             FLASK_ENV: 'production',
@@ -58,6 +59,7 @@ function startFlaskServer() {
         };
 
         if (!isDev) {
+            // Production: use resources folder
             try {
                 const dataDir = path.join(process.resourcesPath, 'heimdall-backend');
                 spawnEnv.HEIMDALL_DATA_DIR = dataDir;
@@ -65,6 +67,16 @@ function startFlaskServer() {
                 console.log('Will spawn backend with HEIMDALL_DATA_DIR=', dataDir);
             } catch (e) {
                 console.warn('Failed to compute HEIMDALL_DATA_DIR:', e);
+            }
+        } else {
+            // Development: use project root 'data' folder instead of AppData
+            try {
+                const dataDir = path.join(__dirname, '..', 'data');
+                spawnEnv.HEIMDALL_DATA_DIR = dataDir;
+                spawnEnv.HEIMDALL_PORTABLE = '1';
+                console.log('Development mode: using HEIMDALL_DATA_DIR=', dataDir);
+            } catch (e) {
+                console.warn('Failed to compute HEIMDALL_DATA_DIR for development:', e);
             }
         }
 
