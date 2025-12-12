@@ -3,3 +3,5 @@ requests
 dotenv
 bcrypt
 waitress
+yt-dlp
+jiosaavn-python

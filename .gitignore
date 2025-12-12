@@ -34,3 +34,6 @@ desktop.ini
 
 # Virtual environment
 .venv/
+
+# Development data directory (stores user data in dev mode)
+/data/

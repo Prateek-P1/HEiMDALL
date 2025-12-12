@@ -47,6 +47,7 @@ function startFlaskServer() {
         // Build the environment for the spawned backend. For production we
         // explicitly set HEIMDALL_DATA_DIR so the packaged exe reads the
         // same resources folder that the installer places files into.
+        // For development, set it to a 'data' folder in the project root.
         const spawnEnv = {
             ...process.env,
             FLASK_ENV: 'production',
@@ -58,6 +59,7 @@ function startFlaskServer() {
         };
 
         if (!isDev) {
+            // Production: use resources folder
             try {
                 const dataDir = path.join(process.resourcesPath, 'heimdall-backend');
                 spawnEnv.HEIMDALL_DATA_DIR = dataDir;
@@ -65,6 +67,16 @@ function startFlaskServer() {
                 console.log('Will spawn backend with HEIMDALL_DATA_DIR=', dataDir);
             } catch (e) {
                 console.warn('Failed to compute HEIMDALL_DATA_DIR:', e);
+            }
+        } else {
+            // Development: use project root 'data' folder instead of AppData
+            try {
+                const dataDir = path.join(__dirname, '..', 'data');
+                spawnEnv.HEIMDALL_DATA_DIR = dataDir;
+                spawnEnv.HEIMDALL_PORTABLE = '1';
+                console.log('Development mode: using HEIMDALL_DATA_DIR=', dataDir);
+            } catch (e) {
+                console.warn('Failed to compute HEIMDALL_DATA_DIR for development:', e);
             }
         }
 
@@ -124,19 +136,25 @@ function createPlayerWindow(url) {
     // Remove menu bar
     playerWindow.setMenuBarVisibility(false);
 
-    // Load the Vidrock URL
-    playerWindow.loadURL(url);
-
-    // Handle any external links from the player window
-    playerWindow.webContents.setWindowOpenHandler(({ url: newUrl }) => {
-        // Keep navigation within Vidrock in the same window
-        if (newUrl.includes('vidrock.net')) {
-            return { action: 'allow' };
-        }
-        // Open other links in default browser
-        require('electron').shell.openExternal(newUrl);
+    // BLOCK ALL POPUPS - This prevents window.open() calls from opening new windows
+    // This stops the annoying ad popups that trigger when clicking play
+    playerWindow.webContents.setWindowOpenHandler(() => {
+        // Deny ALL popup attempts - return deny for everything
         return { action: 'deny' };
     });
+
+    // Also prevent navigation to external sites within the same window
+    // This keeps the player on vidrock and prevents redirect-based ads
+    playerWindow.webContents.on('will-navigate', (event, navigationUrl) => {
+        // Allow navigation only within vidrock.net domain
+        if (!navigationUrl.includes('vidrock.net')) {
+            console.log('Blocked navigation to:', navigationUrl);
+            event.preventDefault();
+        }
+    });
+
+    // Load the Vidrock URL
+    playerWindow.loadURL(url);
 
     return playerWindow;
 }
