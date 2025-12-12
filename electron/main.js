@@ -136,19 +136,25 @@ function createPlayerWindow(url) {
     // Remove menu bar
     playerWindow.setMenuBarVisibility(false);
 
-    // Load the Vidrock URL
-    playerWindow.loadURL(url);
-
-    // Handle any external links from the player window
-    playerWindow.webContents.setWindowOpenHandler(({ url: newUrl }) => {
-        // Keep navigation within Vidrock in the same window
-        if (newUrl.includes('vidrock.net')) {
-            return { action: 'allow' };
-        }
-        // Open other links in default browser
-        require('electron').shell.openExternal(newUrl);
+    // BLOCK ALL POPUPS - This prevents window.open() calls from opening new windows
+    // This stops the annoying ad popups that trigger when clicking play
+    playerWindow.webContents.setWindowOpenHandler(() => {
+        // Deny ALL popup attempts - return deny for everything
         return { action: 'deny' };
     });
+
+    // Also prevent navigation to external sites within the same window
+    // This keeps the player on vidrock and prevents redirect-based ads
+    playerWindow.webContents.on('will-navigate', (event, navigationUrl) => {
+        // Allow navigation only within vidrock.net domain
+        if (!navigationUrl.includes('vidrock.net')) {
+            console.log('Blocked navigation to:', navigationUrl);
+            event.preventDefault();
+        }
+    });
+
+    // Load the Vidrock URL
+    playerWindow.loadURL(url);
 
     return playerWindow;
 }
