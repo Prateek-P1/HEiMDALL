@@ -252,7 +252,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // --- MODIFIED: Update Play Button to redirect to Vidrock directly ---
             const playLink = document.getElementById('details-play-link');
-            const musicLink = document.getElementById('details-music-link');
             if (mediaType === 'movie') {
                 playLink.href = `https://vidrock.net/movie/${tmdbId}`;
                 playLink.target = '_blank'; // Open in new tab
@@ -260,14 +259,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Default "Play" button to Season 1, Episode 1 on Vidrock
                 playLink.href = `https://vidrock.net/tv/${tmdbId}/1/1`;
                 playLink.target = '_blank'; // Open in new tab
-            }
-
-            // Point the Music button to the soundtrack search with the title/name prefilled
-            if (musicLink) {
-                const musicQuery = details.title || details.name;
-                if (musicQuery) {
-                    musicLink.href = `/music.html?q=${encodeURIComponent(musicQuery)}`;
-                }
             }
             
             // Check watchlist status and update button

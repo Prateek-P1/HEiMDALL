@@ -1181,6 +1181,14 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // If a query param is present (e.g., /music.html?q=Inception), prefill and search
+    const params = new URLSearchParams(window.location.search);
+    const presetQuery = params.get('q');
+    if (presetQuery) {
+        searchInput.value = presetQuery;
+        searchMusic(presetQuery);
+    }
+
     // Initialize
     loadQueue();
     loadPlaylists();
