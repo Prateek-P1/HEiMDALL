@@ -332,7 +332,7 @@ document.addEventListener('DOMContentLoaded', () => {
         `;
 
         try {
-            const response = await fetch(`http://127.0.0.1:8000/api/music/search/${encodeURIComponent(query)}`);
+            const response = await fetch(`${window.location.origin}/api/music/search/${encodeURIComponent(query)}`);
             const results = await response.json();
 
             resultsList.innerHTML = '';
@@ -458,7 +458,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         try {
             const response = await fetch(
-                `http://127.0.0.1:8000/api/music/stream?source=${track.source}&id=${encodeURIComponent(track.id)}`
+                `${window.location.origin}/api/music/stream?source=${track.source}&id=${encodeURIComponent(track.id)}`
             );
             const data = await response.json();
 
@@ -769,7 +769,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try {
             const response = await fetch(
-                `http://127.0.0.1:8000/api/music/lyrics?artist=${encodeURIComponent(artist)}&title=${encodeURIComponent(title)}`
+                `${window.location.origin}/api/music/lyrics?artist=${encodeURIComponent(artist)}&title=${encodeURIComponent(title)}`
             );
 
             if (response.status === 404) {
@@ -1180,6 +1180,14 @@ document.addEventListener('DOMContentLoaded', () => {
             searchMusic(searchInput.value);
         }
     });
+
+    // If a query param is present (e.g., /music.html?q=Inception), prefill and search
+    const params = new URLSearchParams(window.location.search);
+    const presetQuery = params.get('q');
+    if (presetQuery) {
+        searchInput.value = presetQuery;
+        searchMusic(presetQuery);
+    }
 
     // Initialize
     loadQueue();

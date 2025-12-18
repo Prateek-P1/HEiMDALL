@@ -1,5 +1,6 @@
 # backend/app.py
 from flask import Flask, render_template, send_from_directory, request, jsonify, redirect, session, abort
+from flask_cors import CORS
 import os
 import sys
 import requests
@@ -24,6 +25,9 @@ app = Flask(__name__,
             static_folder=FRONTEND_DIR,
             static_url_path='')
 
+# Enable CORS for all routes
+CORS(app)
+
 # Secret keys
 # Defer secret key setup until after the User model determines the data dir
 app.secret_key = None
@@ -42,7 +46,7 @@ def add_cache_control_headers(response):
     return response
 
 # Initialize the User model
-from models.user import User
+from .models.user import User
 user_model = User()
 print(f"Heimdall data dir: {getattr(user_model, 'app_data_dir', 'unknown')}")
 print(f"User file: {user_model.file_path}")
