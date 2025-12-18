@@ -1,5 +1,6 @@
 # backend/app.py
 from flask import Flask, render_template, send_from_directory, request, jsonify, redirect, session, abort
+from flask_cors import CORS
 import os
 import sys
 import requests
@@ -23,6 +24,9 @@ app = Flask(__name__,
             template_folder=FRONTEND_DIR,
             static_folder=FRONTEND_DIR,
             static_url_path='')
+
+# Enable CORS for all routes
+CORS(app)
 
 # Secret keys
 # Defer secret key setup until after the User model determines the data dir
