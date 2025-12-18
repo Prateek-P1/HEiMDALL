@@ -48,6 +48,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const closePlaylistsBtn = document.getElementById('close-playlists-btn');
     const createPlaylistBtn = document.getElementById('create-playlist-btn');
     const createPlaylistEmptyBtn = document.getElementById('create-playlist-empty-btn');
+    const quickCreatePlaylistBtn = document.getElementById('quick-create-playlist');
+    const quickOpenPlaylistsBtn = document.getElementById('quick-open-playlists');
+    const quickOpenPlaylistsBtn2 = document.getElementById('quick-open-playlists-2');
+    const quickOpenQueueBtn = document.getElementById('quick-open-queue');
+    const quickOpenLyricsBtn = document.getElementById('quick-open-lyrics');
+    const quickSearchButtons = document.querySelectorAll('[data-search-term]');
+    const playlistsOverview = document.getElementById('playlists-overview');
+    const playlistsOverviewList = document.getElementById('playlists-overview-list');
     const playlistsList = document.getElementById('playlists-list');
     const playlistsEmpty = document.getElementById('playlists-empty');
     const playlistsCount = document.getElementById('playlists-count');
@@ -100,6 +108,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (saved) {
                 playlists = JSON.parse(saved);
                 updatePlaylistsUI();
+                updatePlaylistsOverview();
             }
         } catch (e) {
             console.error('Failed to load playlists:', e);
@@ -110,9 +119,107 @@ document.addEventListener('DOMContentLoaded', () => {
     const savePlaylists = () => {
         try {
             localStorage.setItem('heimdall-music-playlists', JSON.stringify(playlists));
+            updatePlaylistsOverview();
         } catch (e) {
             console.error('Failed to save playlists:', e);
         }
+    };
+
+    const updatePlaylistsOverview = () => {
+        // Update inline playlists overview (in grid)
+        const inlineList = document.getElementById('playlists-overview-list-inline');
+        const inlineEmpty = document.getElementById('playlists-empty-inline');
+        
+        if (inlineList && inlineEmpty) {
+            if (!playlists || playlists.length === 0) {
+                inlineList.classList.add('hidden');
+                inlineEmpty.classList.remove('hidden');
+            } else {
+                inlineList.classList.remove('hidden');
+                inlineEmpty.classList.add('hidden');
+                
+                const sorted = [...playlists].sort((a, b) => new Date(b.updatedAt || b.createdAt || 0) - new Date(a.updatedAt || a.createdAt || 0));
+                
+                inlineList.innerHTML = sorted.map((pl) => {
+                    const trackCount = pl.tracks ? pl.tracks.length : 0;
+                    return `
+                        <div class="bg-brand-light-gray rounded-lg p-3 hover:bg-gray-700 transition-colors">
+                            <div class="flex items-center justify-between mb-2">
+                                <h4 class="font-semibold text-white text-sm truncate flex-1 mr-2">${pl.name}</h4>
+                                <span class="text-xs text-gray-400 flex-shrink-0">${trackCount} tracks</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <button class="flex-1 px-3 py-1.5 bg-brand-red hover:bg-red-700 rounded text-xs font-medium transition-colors" data-pl-action="play" data-pl-id="${pl.id}">Play</button>
+                                <button class="px-3 py-1.5 bg-gray-600 hover:bg-gray-500 rounded text-xs font-medium transition-colors" data-pl-action="open" data-pl-id="${pl.id}">Open</button>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+                
+                // Wire buttons for inline version
+                inlineList.querySelectorAll('[data-pl-action="play"]').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        const pid = btn.getAttribute('data-pl-id');
+                        playPlaylist(pid);
+                    });
+                });
+                
+                inlineList.querySelectorAll('[data-pl-action="open"]').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        const pid = btn.getAttribute('data-pl-id');
+                        selectedPlaylistId = pid;
+                        togglePlaylistsPanel(true);
+                    });
+                });
+            }
+        }
+        
+        // Keep old playlists overview code for backward compatibility (if it exists)
+        if (!playlistsOverview || !playlistsOverviewList) return;
+
+        if (!playlists || playlists.length === 0) {
+            playlistsOverview.classList.add('hidden');
+            playlistsOverviewList.innerHTML = '';
+            return;
+        }
+
+        playlistsOverview.classList.remove('hidden');
+        const sorted = [...playlists].sort((a, b) => new Date(b.updatedAt || b.createdAt || 0) - new Date(a.updatedAt || a.createdAt || 0));
+        const top = sorted.slice(0, 6);
+
+        playlistsOverviewList.innerHTML = top.map((pl) => {
+            const trackCount = pl.tracks ? pl.tracks.length : 0;
+            const updated = pl.updatedAt ? new Date(pl.updatedAt).toLocaleDateString() : 'New';
+            return `
+                <div class="bg-brand-gray border border-brand-light-gray rounded-lg p-4 shadow-lg">
+                    <div class="flex items-start justify-between mb-2">
+                        <h4 class="font-bold text-white truncate">${pl.name}</h4>
+                        <span class="text-xs text-gray-400">${updated}</span>
+                    </div>
+                    <p class="text-sm text-gray-400 mb-3">${trackCount} track${trackCount === 1 ? '' : 's'}</p>
+                    <div class="flex items-center gap-2 text-sm text-gray-300">
+                        <button class="px-3 py-2 bg-brand-red hover:bg-red-700 rounded-lg transition-colors" data-pl-action="play" data-pl-id="${pl.id}">Play</button>
+                        <button class="px-3 py-2 bg-brand-light-gray hover:bg-gray-600 rounded-lg transition-colors" data-pl-action="open" data-pl-id="${pl.id}">Open</button>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        // Wire buttons
+        playlistsOverviewList.querySelectorAll('[data-pl-action="play"]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const pid = btn.getAttribute('data-pl-id');
+                playPlaylist(pid);
+            });
+        });
+
+        playlistsOverviewList.querySelectorAll('[data-pl-action="open"]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const pid = btn.getAttribute('data-pl-id');
+                selectedPlaylistId = pid;
+                togglePlaylistsPanel(true);
+            });
+        });
     };
 
     // Create new playlist
@@ -439,6 +546,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         currentTrack = track;
+        
+        // Save current track to localStorage
+        try {
+            localStorage.setItem('heimdall-music-current-track', JSON.stringify(track));
+        } catch (e) {
+            console.error('Failed to save current track:', e);
+        }
         
         playerTrackImage.src = track.image || 'https://placehold.co/80x80/1a1d23/666?text=No+Image';
         playerTrackTitle.textContent = track.title;
@@ -1002,13 +1116,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
             playlistsList.appendChild(playlistCard);
         });
+
+            updatePlaylistsOverview();
     }
 
     // Toggle playlists panel
-    function togglePlaylistsPanel() {
+    function togglePlaylistsPanel(forceOpen = null) {
         const isHidden = playlistsPanel.classList.contains('hidden');
+        const shouldOpen = forceOpen === true || (forceOpen === null && isHidden);
 
-        if (isHidden) {
+        if (shouldOpen) {
             closeQueuePanel();
             closeLyricsPanel();
             playlistsPanel.classList.remove('hidden');
@@ -1019,6 +1136,43 @@ document.addEventListener('DOMContentLoaded', () => {
             playlistsPanel.classList.add('hidden');
             mainContent.style.marginRight = '0';
         }
+    }
+
+    // Enable quick-start buttons in the starter grid
+    if (quickCreatePlaylistBtn) {
+        quickCreatePlaylistBtn.addEventListener('click', () => {
+            playlistNameInput.value = '';
+            createPlaylistModal.classList.remove('hidden');
+            playlistNameInput.focus();
+        });
+    }
+
+    [quickOpenPlaylistsBtn, quickOpenPlaylistsBtn2].forEach(btn => {
+        if (btn) {
+            btn.addEventListener('click', () => {
+                togglePlaylistsPanel(true);
+            });
+        }
+    });
+
+    if (quickOpenQueueBtn) {
+        quickOpenQueueBtn.addEventListener('click', () => toggleQueuePanel());
+    }
+
+    if (quickOpenLyricsBtn) {
+        quickOpenLyricsBtn.addEventListener('click', () => toggleLyricsPanel());
+    }
+
+    if (quickSearchButtons && quickSearchButtons.length) {
+        quickSearchButtons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const term = btn.getAttribute('data-search-term');
+                if (term) {
+                    searchInput.value = term;
+                    searchMusic(term);
+                }
+            });
+        });
     }
 
     // Close playlists panel
@@ -1181,13 +1335,61 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // Collapse/expand search results
+    const toggleResultsBtn = document.getElementById('toggle-results-btn');
+    const collapseIcon = document.getElementById('collapse-icon');
+    let resultsCollapsed = false;
+
+    if (toggleResultsBtn) {
+        toggleResultsBtn.addEventListener('click', () => {
+            resultsCollapsed = !resultsCollapsed;
+            if (resultsCollapsed) {
+                resultsList.classList.add('hidden');
+                collapseIcon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />';
+                toggleResultsBtn.title = 'Expand results';
+            } else {
+                resultsList.classList.remove('hidden');
+                collapseIcon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" d="M5 15l7-7 7 7" />';
+                toggleResultsBtn.title = 'Collapse results';
+            }
+        });
+    }
+
     // If a query param is present (e.g., /music.html?q=Inception), prefill and search
     const params = new URLSearchParams(window.location.search);
     const presetQuery = params.get('q');
     if (presetQuery) {
         searchInput.value = presetQuery;
+        clearSearchBtn.classList.remove('hidden');
         searchMusic(presetQuery);
     }
+
+    // Restore last played track if available
+    const restoreLastTrack = () => {
+        try {
+            const saved = localStorage.getItem('heimdall-music-current-track');
+            if (saved) {
+                const track = JSON.parse(saved);
+                // Show player UI with the track info but don't auto-play
+                playerTrackImage.src = track.image || 'https://placehold.co/80x80/1a1d23/666?text=No+Image';
+                playerTrackTitle.textContent = track.title;
+                playerTrackArtist.textContent = track.artist;
+                playerContainer.classList.remove('hidden');
+                currentTrack = track;
+                
+                // Update queue now playing
+                if (queueNowPlaying) {
+                    queueCurrentImage.src = track.image || 'https://placehold.co/80x80/1a1d23/666?text=No+Image';
+                    queueCurrentTitle.textContent = track.title;
+                    queueCurrentArtist.textContent = track.artist;
+                    queueNowPlaying.classList.remove('hidden');
+                }
+            }
+        } catch (e) {
+            console.error('Failed to restore last track:', e);
+        }
+    };
+    restoreLastTrack();
 
     // Initialize
     loadQueue();
