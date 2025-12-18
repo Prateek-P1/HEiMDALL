@@ -42,7 +42,7 @@ def add_cache_control_headers(response):
     return response
 
 # Initialize the User model
-from models.user import User
+from .models.user import User
 user_model = User()
 print(f"Heimdall data dir: {getattr(user_model, 'app_data_dir', 'unknown')}")
 print(f"User file: {user_model.file_path}")
