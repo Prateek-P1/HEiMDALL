@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Heimdall | Watch Party</title>
+    <link rel="icon" type="image/x-icon" href="assets/HEiMDALL_logo.ico">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        inter: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        'brand-black': '#0b0c0f',
+                        'brand-gray': '#1a1d23',
+                        'brand-light-gray': '#2c313a',
+                        'brand-red': '#e50914',
+                    }
+                },
+            },
+        }
+    </script>
+    <link rel="stylesheet" href="css/main.css">
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+</head>
+<body class="bg-brand-black text-white font-inter">
+
+    <!-- Header / Navigation -->
+    <header class="fixed top-0 left-0 right-0 z-50 bg-brand-black bg-opacity-80 backdrop-blur-md shadow-lg">
+        <nav class="container mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-20">
+            <div class="flex items-center space-x-8">
+                <a href="/index.html" class="text-3xl font-bold text-brand-red tracking-wider">
+                    HEiMDALL
+                </a>
+                <div class="hidden md:flex items-center space-x-6">
+                    <a href="/index.html" class="text-gray-300 hover:text-white transition duration-200">Home</a>
+                    <a href="/search.html" class="text-gray-300 hover:text-white transition duration-200">Discover</a>
+                    <a href="/watchlist.html" class="text-gray-300 hover:text-white transition duration-200">My List</a>
+                    <a href="/music.html" class="text-gray-300 hover:text-white transition duration-200">Music</a>
+                    <a href="/watchparty.html" class="text-white font-semibold hover:text-brand-red transition duration-200">Watch Party</a>
+                </div>
+            </div>
+            <div class="flex items-center space-x-4 sm:space-x-6">
+                <button id="search-open-button" class="text-gray-300 hover:text-white transition duration-200">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                </button>
+                <a href="profiles.html" class="relative">
+                    <button class="flex items-center space-x-2 text-gray-300 hover:text-white transition duration-200">
+                        <img id="nav-profile-img" class="h-8 w-8 rounded-md object-cover" src="https://placehold.co/40x40/e50914/white?text=V" alt="User Profile">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 hidden sm:block" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
+                        </svg>
+                    </button>
+                </a>
+            </div>
+        </nav>
+    </header>
+
+    <!-- Main Content -->
+    <main class="pt-32 pb-16 min-h-screen">
+        <div class="container mx-auto px-4 sm:px-6 lg:px-8">
+
+            <!-- Page Title -->
+            <div class="mb-12">
+                <h1 class="text-5xl font-bold mb-4">
+                    <span class="text-brand-red">Watch</span> Party
+                </h1>
+                <p class="text-gray-400 text-lg">Watch movies and shows together with friends in real-time</p>
+            </div>
+
+            <!-- Join Room Section -->
+            <div class="mb-12 bg-brand-gray rounded-xl p-8 border border-brand-light-gray">
+                <h2 class="text-2xl font-bold mb-4">Join a Room</h2>
+                <p class="text-gray-400 mb-6">Enter a 6-character room code to join a watch party</p>
+                
+                <div class="flex gap-4 max-w-md">
+                    <input 
+                        type="text" 
+                        id="room-code-input" 
+                        placeholder="ABCD12" 
+                        maxlength="6"
+                        class="flex-1 px-4 py-3 bg-brand-light-gray rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-brand-red uppercase"
+                    >
+                    <button 
+                        id="join-room-btn"
+                        class="px-8 py-3 bg-brand-red hover:bg-red-700 rounded-lg font-semibold transition duration-200"
+                    >
+                        Join
+                    </button>
+                </div>
+                <div id="join-error" class="mt-4 text-red-500 hidden"></div>
+            </div>
+
+            <!-- Active Rooms Section -->
+            <div class="mb-12">
+                <div class="flex items-center justify-between mb-6">
+                    <h2 class="text-2xl font-bold">Active Rooms</h2>
+                    <button 
+                        id="refresh-rooms-btn"
+                        class="px-4 py-2 bg-brand-light-gray hover:bg-gray-600 rounded-lg transition duration-200 flex items-center gap-2"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                        Refresh
+                    </button>
+                </div>
+
+                <div id="rooms-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <!-- Rooms will be populated here -->
+                </div>
+                <div id="no-rooms" class="text-center py-12 text-gray-500 hidden">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 mx-auto mb-4 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                    </svg>
+                    <p class="text-xl">No active watch parties</p>
+                    <p class="text-sm mt-2">Start one from any movie or show details page!</p>
+                </div>
+            </div>
+
+            <!-- How it Works -->
+            <div class="bg-brand-gray rounded-xl p-8 border border-brand-light-gray">
+                <h2 class="text-2xl font-bold mb-6">How It Works</h2>
+                <div class="grid md:grid-cols-3 gap-8">
+                    <div class="text-center">
+                        <div class="w-16 h-16 bg-brand-red rounded-full flex items-center justify-center mx-auto mb-4">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                            </svg>
+                        </div>
+                        <h3 class="font-semibold text-lg mb-2">1. Create a Party</h3>
+                        <p class="text-gray-400 text-sm">Go to any movie or show and click "Start Watch Party"</p>
+                    </div>
+                    <div class="text-center">
+                        <div class="w-16 h-16 bg-brand-red rounded-full flex items-center justify-center mx-auto mb-4">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+                            </svg>
+                        </div>
+                        <h3 class="font-semibold text-lg mb-2">2. Share Code</h3>
+                        <p class="text-gray-400 text-sm">Share the 6-character room code with your friends</p>
+                    </div>
+                    <div class="text-center">
+                        <div class="w-16 h-16 bg-brand-red rounded-full flex items-center justify-center mx-auto mb-4">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                        </div>
+                        <h3 class="font-semibold text-lg mb-2">3. Watch Together</h3>
+                        <p class="text-gray-400 text-sm">Everyone's playback stays in perfect sync automatically</p>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- Search Overlay (shared component) -->
+    <div id="search-overlay" class="hidden fixed inset-0 z-50 bg-brand-black/90 backdrop-blur-sm p-4 pt-20 sm:p-8 sm:pt-24">
+        <button id="search-close-button" class="absolute top-6 right-6 text-gray-400 hover:text-white">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+        </button>
+        <div class="container mx-auto max-w-4xl">
+            <input type="text" id="search-input" placeholder="Search for movies and TV shows..."
+                   class="w-full p-4 bg-brand-gray border-2 border-brand-light-gray rounded-lg text-white text-xl placeholder-gray-500 focus:outline-none focus:border-brand-red">
+            <div class="text-center my-4">
+                <a href="/search.html" class="text-lg text-brand-red hover:text-white transition-colors">
+                    Advanced Discover Page &rarr;
+                </a>
+            </div>
+            <div id="search-results" class="mt-6 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 max-h-[60vh] overflow-y-auto">
+                <!-- Results here -->
+            </div>
+        </div>
+    </div>
+
+    <script src="js/watchparty.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>

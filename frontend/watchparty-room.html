@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Watch Party Room | Heimdall</title>
+    <link rel="icon" type="image/x-icon" href="/assets/HEiMDALL_logo.ico">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        inter: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        'brand-black': '#0b0c0f',
+                        'brand-gray': '#1a1d23',
+                        'brand-light-gray': '#2c313a',
+                        'brand-red': '#e50914',
+                    }
+                },
+            },
+        }
+    </script>
+    <link rel="stylesheet" href="/css/main.css">
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+</head>
+<body class="bg-brand-black text-white font-inter">
+
+    <!-- Header -->
+    <header class="fixed top-0 left-0 right-0 z-50 bg-brand-black bg-opacity-95 backdrop-blur-md shadow-lg border-b border-brand-light-gray">
+        <div class="container mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-16">
+            <div class="flex items-center space-x-4">
+                <a href="/index.html" class="text-2xl font-bold text-brand-red tracking-wider">HEiMDALL</a>
+                <span class="text-gray-400">|</span>
+                <h1 class="text-xl font-semibold" id="room-title">Watch Party</h1>
+            </div>
+            <button onclick="leaveRoom()" class="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg transition duration-200">
+                Leave Room
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="pt-20 min-h-screen">
+        <div class="container mx-auto px-4 py-6">
+            <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                
+                <!-- Video Player Section (Left - 3/4 width) -->
+                <div class="lg:col-span-3">
+                    <!-- Room Info Banner -->
+                    <div class="bg-gradient-to-r from-purple-600 to-pink-600 rounded-xl p-6 mb-6 shadow-lg">
+                        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                            <div>
+                                <h2 class="text-2xl font-bold mb-2">🎬 <span id="media-title">Loading...</span></h2>
+                                <p class="text-white/90">Everyone in this room watches together in perfect sync</p>
+                            </div>
+                            <div class="flex flex-col items-center bg-white/20 rounded-lg px-6 py-3 backdrop-blur-sm">
+                                <span class="text-sm text-white/80 mb-1">Room Code</span>
+                                <div class="flex items-center gap-2">
+                                    <span class="text-3xl font-bold font-mono tracking-wider" id="room-code-display">------</span>
+                                    <button onclick="copyRoomCode()" class="p-2 hover:bg-white/20 rounded transition" title="Copy code">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Video Player -->
+                    <div class="bg-brand-gray rounded-xl overflow-hidden shadow-2xl">
+                        <div class="aspect-video bg-black flex items-center justify-center" id="video-container">
+                            <div class="text-center p-8">
+                                <div class="animate-pulse mb-4">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 mx-auto text-brand-red" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                </div>
+                                <p class="text-xl text-gray-400 mb-2">Setting up watch party...</p>
+                                <p class="text-sm text-gray-500">The video will load shortly</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Status Messages -->
+                    <div id="status-message" class="mt-4 p-4 rounded-lg hidden">
+                        <p id="status-text"></p>
+                    </div>
+                </div>
+
+                <!-- Sidebar (Right - 1/4 width) -->
+                <div class="lg:col-span-1">
+                    
+                    <!-- Participants -->
+                    <div class="bg-brand-gray rounded-xl p-6 mb-6 shadow-lg">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-lg font-bold">Watching</h3>
+                            <span class="bg-brand-red px-3 py-1 rounded-full text-sm font-semibold" id="participant-count">0</span>
+                        </div>
+                        <div id="participants-list" class="space-y-3 max-h-[300px] overflow-y-auto">
+                            <!-- Participants will be added here -->
+                        </div>
+                        <div id="waiting-message" class="text-center py-8 text-gray-500">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 mx-auto mb-3 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            <p class="text-sm">Waiting for others to join...</p>
+                        </div>
+                    </div>
+
+                    <!-- Room Controls -->
+                    <div class="bg-brand-gray rounded-xl p-6 shadow-lg">
+                        <h3 class="text-lg font-bold mb-4">Room Info</h3>
+                        <div class="space-y-3 text-sm">
+                            <div class="flex justify-between items-center py-2 border-b border-brand-light-gray">
+                                <span class="text-gray-400">Host</span>
+                                <span class="font-semibold" id="host-name">---</span>
+                            </div>
+                            <div class="flex justify-between items-center py-2 border-b border-brand-light-gray">
+                                <span class="text-gray-400">You</span>
+                                <span class="font-semibold" id="current-user-name">---</span>
+                            </div>
+                            <div class="flex justify-between items-center py-2">
+                                <span class="text-gray-400">Status</span>
+                                <span class="flex items-center gap-2">
+                                    <span class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                                    <span class="font-semibold text-green-400" id="connection-status">Connected</span>
+                                </span>
+                            </div>
+                        </div>
+
+                        <button onclick="shareRoom()" class="w-full mt-6 py-3 bg-purple-600 hover:bg-purple-700 rounded-lg font-semibold transition duration-200 flex items-center justify-center gap-2">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                            </svg>
+                            Share Room
+                        </button>
+                    </div>
+
+                    <!-- Instructions -->
+                    <div class="bg-brand-light-gray rounded-xl p-6 mt-6 border border-gray-700">
+                        <h4 class="font-semibold mb-3 text-sm">📌 How it works</h4>
+                        <ul class="text-xs text-gray-400 space-y-2">
+                            <li>✓ Share the room code with friends</li>
+                            <li>✓ Everyone's playback stays synced</li>
+                            <li>✓ Anyone can play/pause/seek</li>
+                            <li>✓ Leave anytime without affecting others</li>
+                        </ul>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // Get room code from URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const ROOM_CODE = urlParams.get('room');
+        
+        if (!ROOM_CODE) {
+            alert('No room code provided');
+            window.location.href = '/watchparty.html';
+        }
+
+        // Initialize Socket.IO
+        const socket = io(window.location.origin);
+        let roomData = null;
+        let currentUser = null;
+
+        // Get current user
+        async function getCurrentUser() {
+            try {
+                const response = await fetch('/api/current-user');
+                if (response.ok) {
+                    const data = await response.json();
+                    currentUser = data.username;
+                    document.getElementById('current-user-name').textContent = currentUser;
+                }
+            } catch (error) {
+                console.error('Error getting current user:', error);
+            }
+        }
+
+        // Fetch room details
+        async function fetchRoomDetails() {
+            try {
+                const response = await fetch(`/api/watchparty/${ROOM_CODE}`);
+                if (!response.ok) {
+                    throw new Error('Room not found');
+                }
+                
+                roomData = await response.json();
+                
+                // Update UI
+                document.getElementById('room-code-display').textContent = ROOM_CODE;
+                document.getElementById('media-title').textContent = roomData.media_title;
+                document.getElementById('host-name').textContent = roomData.host;
+                document.getElementById('room-title').textContent = `${roomData.media_title} - Watch Party`;
+                
+                // Load video player
+                loadVideoPlayer(roomData.media_type, roomData.media_id);
+                
+                // Join the room via Socket.IO
+                joinRoomSocket();
+                
+            } catch (error) {
+                console.error('Error fetching room:', error);
+                alert('Failed to load room. The room may have expired.');
+                window.location.href = '/watchparty.html';
+            }
+        }
+
+        // Load video player
+        function loadVideoPlayer(mediaType, mediaId) {
+            const container = document.getElementById('video-container');
+            
+            // Create iframe for vidrock
+            let videoUrl = '';
+            if (mediaType === 'movie') {
+                videoUrl = `https://vidrock.net/movie/${mediaId}`;
+            } else {
+                videoUrl = `https://vidrock.net/tv/${mediaId}/1/1`; // Default to S1E1
+            }
+            
+            container.innerHTML = `
+                <iframe 
+                    src="${videoUrl}" 
+                    class="w-full h-full"
+                    frameborder="0" 
+                    allowfullscreen
+                    allow="autoplay; fullscreen; picture-in-picture"
+                ></iframe>
+            `;
+        }
+
+        // Join room via Socket.IO
+        function joinRoomSocket() {
+            const profile = JSON.parse(localStorage.getItem('vstream-current-profile') || '{}');
+            socket.emit('join_watchparty', {
+                room_code: ROOM_CODE,
+                profile: profile
+            });
+        }
+
+        // Update participants list
+        function updateParticipants(participants) {
+            const list = document.getElementById('participants-list');
+            const waitingMsg = document.getElementById('waiting-message');
+            const count = document.getElementById('participant-count');
+            
+            count.textContent = participants.length;
+            
+            if (participants.length === 0) {
+                waitingMsg.classList.remove('hidden');
+                list.innerHTML = '';
+            } else {
+                waitingMsg.classList.add('hidden');
+                
+                list.innerHTML = participants.map(p => {
+                    const initial = p.username.charAt(0).toUpperCase();
+                    const isHost = roomData && p.username === roomData.host;
+                    
+                    return `
+                        <div class="flex items-center gap-3 p-2 rounded-lg hover:bg-brand-light-gray transition">
+                            <div class="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center font-bold">
+                                ${initial}
+                            </div>
+                            <div class="flex-1">
+                                <p class="font-semibold text-sm">${p.username}</p>
+                                ${isHost ? '<span class="text-xs text-yellow-400">👑 Host</span>' : '<span class="text-xs text-gray-500">Member</span>'}
+                            </div>
+                            <div class="w-2 h-2 bg-green-500 rounded-full"></div>
+                        </div>
+                    `;
+                }).join('');
+            }
+        }
+
+        // Show status message
+        function showStatus(message, type = 'info') {
+            const statusDiv = document.getElementById('status-message');
+            const statusText = document.getElementById('status-text');
+            
+            statusDiv.classList.remove('hidden', 'bg-blue-600', 'bg-green-600', 'bg-yellow-600', 'bg-red-600');
+            
+            if (type === 'success') statusDiv.classList.add('bg-green-600');
+            else if (type === 'warning') statusDiv.classList.add('bg-yellow-600');
+            else if (type === 'error') statusDiv.classList.add('bg-red-600');
+            else statusDiv.classList.add('bg-blue-600');
+            
+            statusText.textContent = message;
+            
+            setTimeout(() => {
+                statusDiv.classList.add('hidden');
+            }, 4000);
+        }
+
+        // Copy room code
+        function copyRoomCode() {
+            navigator.clipboard.writeText(ROOM_CODE);
+            showStatus('Room code copied to clipboard!', 'success');
+        }
+
+        // Share room
+        function shareRoom() {
+            const shareText = `Join my watch party on Heimdall!\n\nRoom Code: ${ROOM_CODE}\nWatching: ${roomData.media_title}\n\nGo to Watch Party tab and enter the code!`;
+            
+            if (navigator.share) {
+                navigator.share({
+                    title: 'Join my Watch Party',
+                    text: shareText
+                });
+            } else {
+                navigator.clipboard.writeText(shareText);
+                showStatus('Share link copied to clipboard!', 'success');
+            }
+        }
+
+        // Leave room
+        function leaveRoom() {
+            if (confirm('Are you sure you want to leave this watch party?')) {
+                socket.emit('leave_watchparty', { room_code: ROOM_CODE });
+                window.location.href = '/watchparty.html';
+            }
+        }
+
+        // Socket.IO event listeners
+        socket.on('connect', () => {
+            document.getElementById('connection-status').textContent = 'Connected';
+        });
+
+        socket.on('disconnect', () => {
+            document.getElementById('connection-status').textContent = 'Disconnected';
+            showStatus('Connection lost. Reconnecting...', 'warning');
+        });
+
+        socket.on('sync_state', (data) => {
+            updateParticipants(data.participants);
+        });
+
+        socket.on('participant_joined', (data) => {
+            updateParticipants(data.participants);
+            showStatus(`${data.username} joined the party! 🎉`, 'success');
+        });
+
+        socket.on('participant_left', (data) => {
+            updateParticipants(data.participants);
+            showStatus(`${data.username} left the party`, 'info');
+        });
+
+        socket.on('error', (data) => {
+            showStatus(data.message, 'error');
+        });
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', async () => {
+            await getCurrentUser();
+            await fetchRoomDetails();
+        });
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            socket.emit('leave_watchparty', { room_code: ROOM_CODE });
+        });
+    </script>
+</body>
+</html>

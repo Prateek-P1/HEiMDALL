@@ -306,6 +306,64 @@ document.addEventListener('DOMContentLoaded', () => {
     // Add watchlist button click handler
     document.getElementById('watchlist-button').addEventListener('click', toggleWatchlist);
 
+    // Add watchparty button click handler
+    const startWatchpartyButton = document.getElementById('start-watchparty-button');
+    if (startWatchpartyButton) {
+        startWatchpartyButton.addEventListener('click', async () => {
+            if (!currentItem) {
+                alert('Please wait for content to load');
+                return;
+            }
+
+            try {
+                // Disable button while creating
+                startWatchpartyButton.disabled = true;
+                startWatchpartyButton.innerHTML = `
+                    <svg class="animate-spin h-6 w-6 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Creating...
+                `;
+
+                const response = await fetch('/api/watchparty/create', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        media_id: tmdbId,
+                        media_type: mediaType,
+                        media_title: currentItem.title || currentItem.name
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to create watchparty');
+                }
+
+                const data = await response.json();
+                const roomCode = data.room_code;
+
+                // Redirect to the dedicated watch party room page
+                window.location.href = `/watchparty-room.html?room=${roomCode}`;
+
+            } catch (error) {
+                console.error('Error creating watchparty:', error);
+                alert('Failed to create watch party. Please try again.');
+                
+                // Re-enable button on error
+                startWatchpartyButton.disabled = false;
+                startWatchpartyButton.innerHTML = `
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                    </svg>
+                    Start Watch Party
+                `;
+            }
+        });
+    }
+
     // --- Load all content ---
     loadDetails();
 });
