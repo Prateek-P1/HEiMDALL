@@ -1,5 +1,9 @@
 flask
 flask-cors
+flask-socketio
+python-socketio
+simple-websocket
+eventlet
 requests
 dotenv
 bcrypt

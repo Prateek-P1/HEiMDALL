@@ -1,12 +1,29 @@
 # backend/app.py
 from flask import Flask, render_template, send_from_directory, request, jsonify, redirect, session, abort
 from flask_cors import CORS
+from flask_socketio import SocketIO, emit, join_room, leave_room
 import os
 import sys
 import requests
 import dotenv
 import asyncio
 import yt_dlp
+import secrets
+import time
+
+# Force PyInstaller to bundle threading driver modules
+try:
+    import engineio.async_drivers.threading
+except ImportError:
+    pass
+try:
+    import engineio.async_threading
+except ImportError:
+    pass
+try:
+    import socketio.async_drivers.threading
+except ImportError:
+    pass
 
 dotenv.load_dotenv()
 
@@ -27,6 +44,29 @@ app = Flask(__name__,
 
 # Enable CORS for all routes
 CORS(app)
+
+# Initialize SocketIO
+# Explicitly set async_mode='threading' to avoid dynamic driver detection issues in PyInstaller
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading', logger=False, engineio_logger=False)
+print(f"SocketIO initialized with threading mode")
+
+# Store active watchparty rooms in memory
+watchparty_rooms = {}
+# Structure: {
+#   'room_code': {
+#     'host': 'username',
+#     'media_id': 12345,
+#     'media_type': 'movie',
+#     'media_title': 'Movie Name',
+#     'participants': {'socket_id': {'username': 'user1', 'profile': {...}}},
+#     'state': {
+#       'playing': False,
+#       'current_time': 0,
+#       'last_updated': timestamp
+#     },
+#     'created_at': timestamp
+#   }
+# }
 
 # Secret keys
 # Defer secret key setup until after the User model determines the data dir
@@ -227,6 +267,20 @@ def music_page():
     if 'username' not in session:
         return redirect('/login.html')
     return render_template('music.html')
+
+@app.route('/watchparty.html')
+def watchparty_page():
+    """Serve the watchparty page"""
+    if 'username' not in session:
+        return redirect('/login.html')
+    return render_template('watchparty.html')
+
+@app.route('/watchparty-room.html')
+def watchparty_room_page():
+    """Serve the watchparty room page"""
+    if 'username' not in session:
+        return redirect('/login.html')
+    return render_template('watchparty-room.html')
 
 @app.route('/details/<media_type>/<int:tmdb_id>')
 def details_page(media_type, tmdb_id):
@@ -691,6 +745,251 @@ def get_music_stream():
         print(f"Stream error: {e}")
         return jsonify({'error': str(e)}), 500
     
+# ==================== WATCHPARTY API ROUTES ====================
+
+def generate_room_code():
+    """Generate unique 6-character room code"""
+    while True:
+        code = secrets.token_urlsafe(6)[:6].upper()
+        if code not in watchparty_rooms:
+            return code
+
+@app.route('/api/watchparty/create', methods=['POST'])
+def create_watchparty():
+    """Create a new watchparty room"""
+    if 'username' not in session:
+        return jsonify({'message': 'Not logged in'}), 401
+    
+    data = request.get_json()
+    media_id = data.get('media_id')
+    media_type = data.get('media_type')
+    media_title = data.get('media_title')
+    
+    if not media_id or not media_type or not media_title:
+        return jsonify({'message': 'Missing required fields'}), 400
+    
+    room_code = generate_room_code()
+    watchparty_rooms[room_code] = {
+        'host': session['username'],
+        'media_id': media_id,
+        'media_type': media_type,
+        'media_title': media_title,
+        'participants': {},
+        'state': {
+            'playing': False,
+            'current_time': 0,
+            'last_updated': None
+        },
+        'created_at': time.time()
+    }
+    
+    print(f"Created watchparty room {room_code} for {media_title}")
+    return jsonify({
+        'room_code': room_code,
+        'message': 'Room created successfully'
+    }), 200
+
+@app.route('/api/watchparty/<room_code>', methods=['GET'])
+def get_watchparty(room_code):
+    """Get details of a specific watchparty room"""
+    if 'username' not in session:
+        return jsonify({'message': 'Not logged in'}), 401
+    
+    room = watchparty_rooms.get(room_code.upper())
+    if not room:
+        return jsonify({'message': 'Room not found'}), 404
+    
+    return jsonify({
+        'room_code': room_code.upper(),
+        'host': room['host'],
+        'media_id': room['media_id'],
+        'media_type': room['media_type'],
+        'media_title': room['media_title'],
+        'participant_count': len(room['participants']),
+        'state': room['state']
+    }), 200
+
+@app.route('/api/watchparty/list', methods=['GET'])
+def list_watchparties():
+    """List all active watchparty rooms"""
+    if 'username' not in session:
+        return jsonify({'message': 'Not logged in'}), 401
+    
+    active_rooms = []
+    for code, room in watchparty_rooms.items():
+        active_rooms.append({
+            'room_code': code,
+            'host': room['host'],
+            'media_title': room['media_title'],
+            'media_type': room['media_type'],
+            'participant_count': len(room['participants']),
+            'created_at': room.get('created_at', 0)
+        })
+    
+    # Sort by creation time (newest first)
+    active_rooms.sort(key=lambda x: x.get('created_at', 0), reverse=True)
+    return jsonify({'rooms': active_rooms}), 200
+
+# ==================== SOCKETIO EVENT HANDLERS ====================
+
+@socketio.on('join_watchparty')
+def handle_join(data):
+    """Handle user joining a watchparty room"""
+    room_code = data.get('room_code', '').upper()
+    username = session.get('username')
+    profile = data.get('profile', {})
+    
+    if not username:
+        emit('error', {'message': 'Not authenticated'})
+        return
+    
+    if room_code not in watchparty_rooms:
+        emit('error', {'message': 'Room not found'})
+        return
+    
+    # Join the room
+    join_room(room_code)
+    
+    # Add participant to room data
+    room = watchparty_rooms[room_code]
+    room['participants'][request.sid] = {
+        'username': username,
+        'profile': profile
+    }
+    
+    print(f"{username} joined room {room_code}")
+    
+    # Notify all participants
+    participant_list = list(room['participants'].values())
+    emit('participant_joined', {
+        'username': username,
+        'participants': participant_list
+    }, room=room_code)
+    
+    # Send current state to the new participant
+    emit('sync_state', {
+        'state': room['state'],
+        'media_id': room['media_id'],
+        'media_type': room['media_type'],
+        'media_title': room['media_title'],
+        'host': room['host'],
+        'participants': participant_list
+    })
+
+@socketio.on('leave_watchparty')
+def handle_leave(data):
+    """Handle user leaving a watchparty room"""
+    room_code = data.get('room_code', '').upper()
+    username = session.get('username')
+    
+    if room_code in watchparty_rooms:
+        room = watchparty_rooms[room_code]
+        
+        # Remove participant
+        if request.sid in room['participants']:
+            del room['participants'][request.sid]
+        
+        leave_room(room_code)
+        
+        print(f"{username} left room {room_code}")
+        
+        # Notify others
+        participant_list = list(room['participants'].values())
+        emit('participant_left', {
+            'username': username,
+            'participants': participant_list
+        }, room=room_code)
+        
+        # Clean up empty rooms
+        if len(room['participants']) == 0:
+            print(f"Deleting empty room {room_code}")
+            del watchparty_rooms[room_code]
+
+@socketio.on('play')
+def handle_play(data):
+    """Handle play event"""
+    room_code = data.get('room_code', '').upper()
+    current_time = data.get('current_time', 0)
+    
+    if room_code in watchparty_rooms:
+        room = watchparty_rooms[room_code]
+        room['state']['playing'] = True
+        room['state']['current_time'] = current_time
+        room['state']['last_updated'] = time.time()
+        
+        print(f"Play event in room {room_code} at {current_time}s")
+        
+        # Broadcast to all in room except sender
+        emit('play', {'current_time': current_time}, room=room_code, include_self=False)
+
+@socketio.on('pause')
+def handle_pause(data):
+    """Handle pause event"""
+    room_code = data.get('room_code', '').upper()
+    current_time = data.get('current_time', 0)
+    
+    if room_code in watchparty_rooms:
+        room = watchparty_rooms[room_code]
+        room['state']['playing'] = False
+        room['state']['current_time'] = current_time
+        room['state']['last_updated'] = time.time()
+        
+        print(f"Pause event in room {room_code} at {current_time}s")
+        
+        emit('pause', {'current_time': current_time}, room=room_code, include_self=False)
+
+@socketio.on('seek')
+def handle_seek(data):
+    """Handle seek/scrub event"""
+    room_code = data.get('room_code', '').upper()
+    current_time = data.get('current_time', 0)
+    
+    if room_code in watchparty_rooms:
+        room = watchparty_rooms[room_code]
+        room['state']['current_time'] = current_time
+        room['state']['last_updated'] = time.time()
+        
+        print(f"Seek event in room {room_code} to {current_time}s")
+        
+        emit('seek', {'current_time': current_time}, room=room_code, include_self=False)
+
+@socketio.on('chat_message')
+def handle_chat(data):
+    """Handle chat messages"""
+    room_code = data.get('room_code', '').upper()
+    message = data.get('message', '')
+    username = session.get('username')
+    
+    if room_code in watchparty_rooms and message:
+        print(f"Chat in room {room_code} from {username}: {message}")
+        emit('chat_message', {
+            'username': username,
+            'message': message,
+            'timestamp': time.time()
+        }, room=room_code)
+
+@socketio.on('disconnect')
+def handle_disconnect():
+    """Handle socket disconnection"""
+    # Auto-leave all rooms on disconnect
+    for room_code in list(watchparty_rooms.keys()):
+        room = watchparty_rooms[room_code]
+        if request.sid in room['participants']:
+            username = room['participants'][request.sid]['username']
+            del room['participants'][request.sid]
+            
+            print(f"{username} disconnected from room {room_code}")
+            
+            emit('participant_left', {
+                'username': username,
+                'participants': list(room['participants'].values())
+            }, room=room_code)
+            
+            # Clean up empty rooms
+            if len(room['participants']) == 0:
+                print(f"Deleting empty room {room_code}")
+                del watchparty_rooms[room_code]
+
 @app.route('/api/music/lyrics')
 def get_lyrics():
     """Proxy endpoint for lyrics with multiple fallback APIs"""
@@ -750,12 +1049,13 @@ def get_lyrics():
     return jsonify({'error': 'Lyrics not found in any source'}), 404
 
 if __name__ == '__main__':
-    # Prefer waitress for a stable single-process server (no reloader).
-    try:
-        from waitress import serve
-        print('Starting waitress server on 127.0.0.1:8000')
-        serve(app, host='127.0.0.1', port=8000)
-    except Exception:
-        # Fall back to Flask dev server if waitress isn't available.
-        print('Waitress not available, starting Flask dev server (debug=False)')
-        app.run(host='127.0.0.1', port=8000, debug=False)
+    # Use SocketIO's run method instead of Flask's or waitress
+    # This is required for WebSocket support
+    # Use 0.0.0.0 to allow connections from other devices on the network
+    print('Starting SocketIO server on 0.0.0.0:8000')
+    print('Access locally at: http://localhost:8000')
+    print('Access from network at: http://<your-ip>:8000')
+    
+    # For development: allow_unsafe_werkzeug=True is needed with socketio.run()
+    # In production (PyInstaller), Flask-SocketIO handles this differently
+    socketio.run(app, host='0.0.0.0', port=8000, debug=False, allow_unsafe_werkzeug=True)
