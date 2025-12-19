@@ -37,3 +37,5 @@ desktop.ini
 
 # Development data directory (stores user data in dev mode)
 /data/
+
+*.log
