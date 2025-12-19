@@ -56,6 +56,11 @@ pyinstaller_args = [
     '--hidden-import=markupsafe',
     '--hidden-import=bcrypt',
     
+    # SocketIO async driver imports
+    '--hidden-import=engineio.async_drivers.threading',
+    '--hidden-import=gevent',
+    '--hidden-import=geventwebsocket',
+    
     # Exclude unnecessary packages to reduce size
     '--exclude-module=tkinter',
     '--exclude-module=matplotlib',
